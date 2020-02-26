@@ -1,4 +1,4 @@
-# Plex MMA Metadata Agent using Tapology & Wikipedia
+# Plex MMA Metadata Agent using Tapology & Wikipedia 
 #
 # Github: https://github.com/lozengenods/MixedMartialArtsAgent.bundle
 #
