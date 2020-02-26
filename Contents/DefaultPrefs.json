@@ -1,0 +1,8 @@
+[
+  {
+    "id"      : "collection",
+    "label"   : "Create Collections from Promotion Name",
+    "type"    : "bool",
+    "default" : "true"
+  }
+]
