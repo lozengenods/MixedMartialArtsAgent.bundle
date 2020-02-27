@@ -81,14 +81,16 @@ class MixedMartialArtsAgent(Agent.Movies):
         for item in searchNameStart.split():
             searchName = (searchName + ' ' + item).strip()
             if item.isdigit():
-                break;           
+                break;
+
         Log("search phrase: " + searchName)
         url = TAPOLOGY_SEARCH_URL % ('%s' % RE_REPLACE.sub(lambda m: rdict[m.group(0)], searchName)) #replace characters with html chars
         searchResults = HTML.ElementFromURL(url)
         events = searchResults.xpath("//div[@class='searchResultsEvent']//a/text()") #get list of events from search results
         eventurls = searchResults.xpath("//div[@class='searchResultsEvent']//a/@href")#get list of event urls
-        searchText = searchResults.xpath("//div[@class='searchResultsEvent']//td/text()") #get event name, date, and # of bouts
-
+        eventNames = searchResults.xpath("//div[@class='searchResultsEvent']//tr/td[3]") #get event name
+        eventDates = searchResults.xpath("//div[@class='searchResultsEvent']//tr/td[5]") #get event dates      
+        
         #get event segment: earlyprelims, prelims, maincard, postlims
         #this is used to get the appropriate fights for the video
         if 'early' in media.name.lower() and 'prelim' in media.name.lower():
@@ -102,30 +104,31 @@ class MixedMartialArtsAgent(Agent.Movies):
             
         #build a dictionary with search results
         eventDict = {}
+        i = 0
         for event in events:
             eventDict[event] = {}
             eventDict[event]['id'] = eventurls.pop(0).split('/')[-1] + ' ' + eventSegment
-            eventDict[event]['score'] = BASESCORE - abs(String.LevenshteinDistance(searchName, event.lower()[:len(searchName)])) #calculate search score
-            
-            if eventSegment == 'earlyprelims':
-                eventDict[event]['name'] = searchText.pop(0) + ' (Early Prelims)'
-            if eventSegment == 'prelims':
-                eventDict[event]['name'] = searchText.pop(0) + ' (Prelims)'
-            if eventSegment == 'postlims':
-                eventDict[event]['name'] = searchText.pop(0) + ' (Postlims)'
-            if eventSegment == 'maincard':
-                eventDict[event]['name'] = searchText.pop(0)                
+            eventDict[event]['score'] = BASESCORE - abs(String.LevenshteinDistance(searchName, event)) #calculate search score
 
-            eventDict[event]['date'] = searchText.pop(0)
-            eventDict[event]['bouts'] = searchText.pop(0)
+            if eventSegment == 'earlyprelims':
+                eventDict[event]['name'] = str(eventNames[i].text) + ' (Early Prelims)'
+            if eventSegment == 'prelims':
+                eventDict[event]['name'] = str(eventNames[i].text) + ' (Prelims)'
+            if eventSegment == 'postlims':
+                eventDict[event]['name'] = str(eventNames[i].text) + ' (Postlims)'
+            if eventSegment == 'maincard':
+                eventDict[event]['name'] = str(eventNames[i].text)                
+
+            eventDict[event]['date'] = eventDates[i].text
             results.Append(MetadataSearchResult(
                 id=eventDict[event]['id'],
                 name=event + ': ' + eventDict[event]['name'],
                 year=eventDict[event]['date'][0:4],
                 lang=lang,
                 score=eventDict[event]['score']
-            ))
-       
+            ))     
+            i += 1     
+                   
         Log('Search results: %s' % eventDict)
         results.Sort('score', descending=True)
         Log("".ljust(157, '-'))
@@ -184,8 +187,8 @@ class MixedMartialArtsAgent(Agent.Movies):
         fighterLeft =  searchResults.xpath("//div[@class='fightCardFighterName left']//text()[normalize-space()]")  #create a list of fighters from the left
         fighterRight = searchResults.xpath("//div[@class='fightCardFighterName right']//text()[normalize-space()]") #create a list of fighters from the right
         fighterImages =  searchResults.xpath("//div[@class='fightCardFighterImage']//img/@src")  #create a list of fighter images from the left        
-        fightBilling = searchResults.xpath("//div[@class='fightCardMatchup']//span[@class='billing']//text()[normalize-space()]")  #create a list of fight billing (main event, main card, etc.)
-        fightWeight = searchResults.xpath("//div[@class='fightCardMatchup']//span[@class='weight']//text()[normalize-space()]")  #create a list of fight billing (main event, main card, etc.)
+        fightBilling = searchResults.xpath("//div[contains(@class,'fightCardMatchup')]//span[@class='billing']//text()[normalize-space()]")  #create a list of fight billing (main event, main card, etc.)
+        fightWeight = searchResults.xpath("//div[contains(@class,'fightCardMatchup')]//span[@class='weight']//text()[normalize-space()]")  #create a list of fight billing (main event, main card, etc.)
         posterURL = searchResults.xpath("//div[@class='details details_with_poster clearfix']//img/@src")[0] #get the url for the poster
         
         fightDict = {}
