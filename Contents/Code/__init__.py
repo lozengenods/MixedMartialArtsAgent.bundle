@@ -1,4 +1,4 @@
-# Plex MMA Metadata Agent using Tapology & Wikipedia 
+# Plex MMA Metadata Agent using Tapology & Wikipedia
 #
 # Github: https://github.com/lozengenods/MixedMartialArtsAgent.bundle
 #
@@ -9,13 +9,14 @@ from random import randint
 TAPOLOGY_SEARCH_URL = "https://www.tapology.com/search?mainSearchFilter=events&term=%s"
 TAPOLOGY_EVENT_URL = "https://www.tapology.com/fightcenter/events/%s"
 BASESCORE = 100
+ALIASES = "https://raw.githubusercontent.com/lozengenods/MixedMartialArtsAgent.bundle/master/Contents/Data/aliases.txt"
 
 rdict = {
     '&': '?',
     ' ': '+',
-    'æ': '%E6',
-    'ø': '%F8',
-    'å': '%E5',
+    'ï¿½': '%E6',
+    'ï¿½': '%F8',
+    'ï¿½': '%E5',
     '(^en |^et |^de |^den |^der |^det )': ''
 }
 
@@ -23,15 +24,19 @@ RE_REPLACE = Regex('|'.join(rdict.keys()), Regex.IGNORECASE)
 
 #function to take in a dictionary, randomizes fighters, and returns a string
 def FormatFight(fightDict):
-    if randint(0,1) == 0:
-        fightStr = fightDict['fighter1'] + ' vs. ' + fightDict['fighter2'] + ' (' + fightDict['weight'] + ' lbs)' 
+    if fightDict['weight'] != '':
+        fightweight = ' (' + fightDict['weight'] + ' lbs)'
     else:
-        fightStr = fightDict['fighter2'] + ' vs. ' + fightDict['fighter1'] + ' (' + fightDict['weight'] + ' lbs)'
-    return fightStr     
+        fightweight = ''
+    if randint(0,1) == 0:
+        fightStr = fightDict['fighter1'] + ' vs. ' + fightDict['fighter2'] + fightweight
+    else:
+        fightStr = fightDict['fighter2'] + ' vs. ' + fightDict['fighter1'] + fightweight
+    return fightStr
 
 #Get number of early-prelim bouts from wikipedia event page
 def GetBoutCount(searchResults, eventPromotion):
-    wikiDict = [0, 0, 0, 0]
+    wikiList = []
     eventWikiURL = ''
 
     if eventPromotion == "Ultimate Fighting Championship": #only needed for UFC events
@@ -42,21 +47,50 @@ def GetBoutCount(searchResults, eventPromotion):
             if 'Event_Wikipedia' in wikiSearch2[i]:
                 eventWikiURL = url
             i += 1
-        
+
         if eventWikiURL != '':
             eventWikiPage = HTML.ElementFromURL(eventWikiURL)
             eventWikiDetails = eventWikiPage.xpath("//table[@class='toccolours']//text()")
-            currentSegment = 0    
+            currentSegment = 0
+            wikiList.append(0)
             for item in eventWikiDetails:
                 if 'main card' in item.lower() or 'preliminary' in item.lower():
                     currentSegment += 1
+                    wikiList.append(0)
                 else:
                     if 'weight' in item.lower() and not 'weight class' in item.lower():
-                        wikiDict[currentSegment] = wikiDict[currentSegment] + 1       
+                        wikiList[currentSegment] = wikiList[currentSegment] + 1
+    return wikiList
 
-    return wikiDict
-    
-    
+#aliases for event names & numbers so filenames can match to tapology searches
+def SwapAliases(event_name,event_number):
+
+    #retrieve the most recent aliases file and split it into a dictionary
+    alias_file = (HTTP.Request(ALIASES).content).splitlines()
+    aliases = {}
+    for line in alias_file:
+        if line[0] != '#': #ignore comments
+            (key, val) = line.lower().split(',')
+            aliases[key.strip()] = val.strip()
+
+    #swap the names first
+    #  ufn -> ufc fight night
+    if event_name in aliases.keys():
+        event_name = aliases[event_name]
+
+    #then swap the full event
+    # ufc fight night 172 -> ufc fight night kattar vs ige
+    # ufc on espn 13      -> ufc fight night kattar vs ige
+
+
+    #ufc fight night 143 = ufc on espn+ 1 - swap the name and number accordingly
+    #if event_name == 'ufc fight night' and event_number >= 143:
+    #    event_number = event_number - 142
+    #    event_name = 'ufc on espn+ ' + str(event_number)
+    #else:
+    if event_number > 0:
+        event_name = (event_name + ' ' + str(event_number)).strip()
+    return event_name
 
 def Start():
   HTTP.CacheTime             = CACHE_1DAY
@@ -69,19 +103,23 @@ class MixedMartialArtsAgent(Agent.Movies):
     contributes_to = None
     languages = [Locale.Language.English]
     accepts_from = ['com.plexapp.agents.localmedia']
-   
+
     def search(self, results, media, lang, manual=False):
         Log("".ljust(157, '-'))
         Log("search() - Title: '%s'" % (media.title))
         Log(media.name)
-        
+
         #reformat search name, strip out prelims, postlims, etc., remove periods, and stop the search string after the first instance of an integer.
         searchNameStart = media.name.lower().replace('prelims','').replace('early','').replace('postlims','').replace('.','') #remove prelim/postlim stuff and periods
         searchName = ''
-        for item in searchNameStart.split():
-            searchName = (searchName + ' ' + item).strip()
+        for item in searchNameStart.lower().split():
             if item.isdigit():
+                searchName = SwapAliases(searchName,int(item))
                 break;
+            else:
+                searchName = (searchName + ' ' + item).strip()
+                if searchName == searchNameStart:
+                    searchName = SwapAliases(searchName,0)
 
         Log("search phrase: " + searchName)
         url = TAPOLOGY_SEARCH_URL % ('%s' % RE_REPLACE.sub(lambda m: rdict[m.group(0)], searchName)) #replace characters with html chars
@@ -89,11 +127,11 @@ class MixedMartialArtsAgent(Agent.Movies):
         events = searchResults.xpath("//div[@class='searchResultsEvent']//a/text()") #get list of events from search results
         eventurls = searchResults.xpath("//div[@class='searchResultsEvent']//a/@href")#get list of event urls
         eventNames = searchResults.xpath("//div[@class='searchResultsEvent']//tr/td[3]") #get event name
-        eventDates = searchResults.xpath("//div[@class='searchResultsEvent']//tr/td[5]") #get event dates      
-        
+        eventDates = searchResults.xpath("//div[@class='searchResultsEvent']//tr/td[5]") #get event dates
+
         #get event segment: earlyprelims, prelims, maincard, postlims
         #this is used to get the appropriate fights for the video
-        if 'early' in media.name.lower() and 'prelim' in media.name.lower():
+        if ('early' in media.name.lower() or 'facebook' in media.name.lower()) and 'prelim' in media.name.lower():
             eventSegment = 'earlyprelims'
         elif 'prelim' in media.name.lower():
             eventSegment = 'prelims'
@@ -101,14 +139,16 @@ class MixedMartialArtsAgent(Agent.Movies):
             eventSegment = 'postlims'
         else:
             eventSegment = 'maincard'
-            
+
+        Log('Segment: ' + eventSegment + '(' + media.name.lower() + ')')
         #build a dictionary with search results
         eventDict = {}
         i = 0
         for event in events:
             eventDict[event] = {}
             eventDict[event]['id'] = eventurls.pop(0).split('/')[-1] + ' ' + eventSegment
-            eventDict[event]['score'] = BASESCORE - abs(String.LevenshteinDistance(searchName, event)) #calculate search score
+            eventDict[event]['score'] = BASESCORE - abs(String.LevenshteinDistance(searchName.lower(), event.lower())) #calculate search score
+            #Log(searchName.lower() + ' . ' + event.lower() + ' . ' + str(eventDict[event]['score']))
 
             if eventSegment == 'earlyprelims':
                 eventDict[event]['name'] = str(eventNames[i].text) + ' (Early Prelims)'
@@ -117,7 +157,7 @@ class MixedMartialArtsAgent(Agent.Movies):
             if eventSegment == 'postlims':
                 eventDict[event]['name'] = str(eventNames[i].text) + ' (Postlims)'
             if eventSegment == 'maincard':
-                eventDict[event]['name'] = str(eventNames[i].text)                
+                eventDict[event]['name'] = str(eventNames[i].text)
 
             eventDict[event]['date'] = eventDates[i].text
             results.Append(MetadataSearchResult(
@@ -126,9 +166,9 @@ class MixedMartialArtsAgent(Agent.Movies):
                 year=eventDict[event]['date'][0:4],
                 lang=lang,
                 score=eventDict[event]['score']
-            ))     
-            i += 1     
-                   
+            ))
+            i += 1
+
         Log('Search results: %s' % eventDict)
         results.Sort('score', descending=True)
         Log("".ljust(157, '-'))
@@ -141,9 +181,9 @@ class MixedMartialArtsAgent(Agent.Movies):
 
         #get event segment: earlyprelims, prelims, maincard, postlims
         #this is used to get the appropriate fights for the video
-        eventSegment = metadata.id.split()[1]           
-       
-        #get event title       
+        eventSegment = metadata.id.split()[1]
+
+        #get event title
         eventTitle = searchResults.xpath("//div[@class='eventPageHeaderTitles']/h1/text()")
         if eventSegment == 'earlyprelims':
             title = eventTitle[0] + ' (Early Prelims)'
@@ -152,60 +192,70 @@ class MixedMartialArtsAgent(Agent.Movies):
         elif eventSegment == 'postlims':
             title = eventTitle[0] + ' (Postlims)'
         else:
-            title = eventTitle[0] 
+            title = eventTitle[0]
 
         #get event details from right column
-        eventDetails = searchResults.xpath("//div[@class='details details_with_poster clearfix']/div[@class='right']//text()")     
+        eventDetails = searchResults.xpath("//div[@class='details details_with_poster clearfix']/div[@class='right']//text()")
 
         #find the promotion name
         if 'Promotion:' in eventDetails:
             eventPromotion = eventDetails[eventDetails.index('Promotion:')+3]
-        
+
         #get bout counts from Wikipedia so we can figure out which prelims are early and which are not
         #Indexes: 0 = should always be zero but here just in case we don't see a header
         #         1 = Main card
         #         2 = Prelims
         #         3 = Early prelims
+        #         4 = Occasional UFC prelims not broadcast (ufc 126, 128)
         boutCount = GetBoutCount(searchResults, eventPromotion)
 
-        #find the date        
-        eventDate = (eventDetails[2].split())[1] 
+        #find the date
+        eventDate = (eventDetails[2].split())[1]
         eventDate = datetime.datetime.strptime(eventDate, "%m.%d.%Y").strftime("%Y-%m-%d") #converts the date to yyyy-mm-dd format
-        
+
         #find the location
         eventLocation = []
-        if 'Location:' in eventDetails: 
+        if 'Location:' in eventDetails:
             eventLocation.append(eventDetails[eventDetails.index('Location:')+2])
         if 'Venue:' in eventDetails:
             eventLocation.append(eventDetails[eventDetails.index('Venue:')+2])
         studio = ' @ '.join(eventLocation)
-        
-       
+
+
         #build a dictionary with fight details
         boutNumbers = searchResults.xpath("//div[@class='fightCardBoutNumber']/text()[normalize-space()]")         #create a list of bout numbers
         boutNumbers = [int(i) for i in boutNumbers]
         fighterLeft =  searchResults.xpath("//div[@class='fightCardFighterName left']//text()[normalize-space()]")  #create a list of fighters from the left
         fighterRight = searchResults.xpath("//div[@class='fightCardFighterName right']//text()[normalize-space()]") #create a list of fighters from the right
-        fighterImages =  searchResults.xpath("//div[@class='fightCardFighterImage']//img/@src")  #create a list of fighter images from the left        
+        fighterImages =  searchResults.xpath("//div[@class='fightCardFighterImage']//img/@src")  #create a list of fighter images from the left
         fightBilling = searchResults.xpath("//div[contains(@class,'fightCardMatchup')]//span[@class='billing']//text()[normalize-space()]")  #create a list of fight billing (main event, main card, etc.)
         fightWeight = searchResults.xpath("//div[contains(@class,'fightCardMatchup')]//span[@class='weight']//text()[normalize-space()]")  #create a list of fight billing (main event, main card, etc.)
         posterURL = searchResults.xpath("//div[@class='details details_with_poster clearfix']//img/@src")[0] #get the url for the poster
-        
+
         fightDict = {}
         i = 0
+        try:
+            earlyprelimbouts = boutCount[3]
+        except:
+            earlyprelimbouts = 0
+
         for bout in boutNumbers:
             fightDict[bout] = {}
             fightDict[bout]['fighter1']    = fighterLeft[i]
             fightDict[bout]['fighter2']    = fighterRight[i]
             fightDict[bout]['fighter1pic'] = fighterImages[i*2]
             fightDict[bout]['fighter2pic'] = fighterImages[i*2+1]
-            fightDict[bout]['weight']      = fightWeight[i]
-            if bout > boutCount[3]:
-                fightDict[bout]['billing'] = fightBilling[i]            
+            try:
+                fightDict[bout]['weight']      = fightWeight[i]
+            except:
+                fightDict[bout]['weight']      = ''
+            if bout > earlyprelimbouts:
+                fightDict[bout]['billing'] = fightBilling[i]
             else:
                 fightDict[bout]['billing'] = 'Early Prelim'
-            i += 1   
-        
+            i += 1
+        Log(fightDict)
+
         #build the summary & add fighters (actors/roles)
         metadata.roles.clear()
         summaryList = []
@@ -219,7 +269,7 @@ class MixedMartialArtsAgent(Agent.Movies):
                     role.photo = fightDict[bout]['fighter1pic']
                     role = metadata.roles.new()
                     role.name = fightDict[bout]['fighter2']
-                    role.photo = fightDict[bout]['fighter2pic']                    
+                    role.photo = fightDict[bout]['fighter2pic']
             if eventSegment == 'prelims':
                 if fightDict[bout]['billing'] in ['Prelim']:
                     summaryList.append(FormatFight(fightDict[bout]))
@@ -228,7 +278,7 @@ class MixedMartialArtsAgent(Agent.Movies):
                     role.photo = fightDict[bout]['fighter1pic']
                     role = metadata.roles.new()
                     role.name = fightDict[bout]['fighter2']
-                    role.photo = fightDict[bout]['fighter2pic']                    
+                    role.photo = fightDict[bout]['fighter2pic']
             if eventSegment == 'earlyprelims':
                 if fightDict[bout]['billing'] in ['Early Prelim']:
                     summaryList.append(FormatFight(fightDict[bout]))
@@ -237,7 +287,7 @@ class MixedMartialArtsAgent(Agent.Movies):
                     role.photo = fightDict[bout]['fighter1pic']
                     role = metadata.roles.new()
                     role.name = fightDict[bout]['fighter2']
-                    role.photo = fightDict[bout]['fighter2pic']                                        
+                    role.photo = fightDict[bout]['fighter2pic']
             if eventSegment == 'postlims':
                 if fightDict[bout]['billing'] in ['Postlim']:
                     summaryList.append(FormatFight(fightDict[bout]))
@@ -246,10 +296,10 @@ class MixedMartialArtsAgent(Agent.Movies):
                     role.photo = fightDict[bout]['fighter1pic']
                     role = metadata.roles.new()
                     role.name = fightDict[bout]['fighter2']
-                    role.photo = fightDict[bout]['fighter2pic']                    
-           
+                    role.photo = fightDict[bout]['fighter2pic']
+
         summary = ', '.join(summaryList)
-        
+
         metadata.title                   = title
         metadata.summary                 = summary
         metadata.studio                  = studio
