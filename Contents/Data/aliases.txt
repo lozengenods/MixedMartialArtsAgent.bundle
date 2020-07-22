@@ -12,6 +12,7 @@ bellator fc                       , bellator
 pride fc                          , pride
 pride fighting championships      , pride
 pride fc gp                       , pride grand prix
+pride fc final conflict           , pride final conflict
 ultimate fighting championship    , ufc
 world series of fighting          , wsof
 invicta fc phoenix rising series  , invicta fc phoenix series
