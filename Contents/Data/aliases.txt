@@ -5,14 +5,21 @@
 # Column 1 = filename match
 # Column 2 = tapology search
 #
-ufn                               , ufc fight night
-ufc live                          , ufc on versus
-bellator fighting championships   , bellator
-bellator fc                       , bellator
-pride fc                          , pride
-pride fighting championships      , pride
-pride fc gp                       , pride grand prix
-pride fc final conflict           , pride final conflict
-ultimate fighting championship    , ufc
-world series of fighting          , wsof
-invicta fc phoenix rising series  , invicta fc phoenix series
+ufn                                    , ufc fight night
+ufc live                               , ufc on versus
+bellator fighting championships        , bellator
+bellator fc                            , bellator
+pride fc                               , pride
+pride fighting championships           , pride
+pride fc bushido                       , pride bushido
+pride fc critical countdown            , pride critical countdown
+pride fc critical countdown absolute   , pride critical countdown absolute
+pride fc final conflict                , pride final conflict
+pride fc final conflict absolute       , pride final conflict absolute
+pride fc hw gp critical countdown      , pride critical countdown
+pride fc gp                            , pride grand prix
+pride fc shockwave                     , pride shockwave
+pride fc total elimination absolute    , pride total elimination absolute
+ultimate fighting championship         , ufc
+world series of fighting               , wsof
+invicta fc phoenix rising series       , invicta fc phoenix series
