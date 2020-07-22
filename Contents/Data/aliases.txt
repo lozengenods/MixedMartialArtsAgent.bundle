@@ -17,6 +17,7 @@ pride fc critical countdown absolute   , pride critical countdown absolute
 pride fc final conflict                , pride final conflict
 pride fc final conflict absolute       , pride final conflict absolute
 pride fc hw gp critical countdown      , pride critical countdown
+pride fc hw gp total elimination       , pride total elimination
 pride fc gp                            , pride grand prix
 pride fc shockwave                     , pride shockwave
 pride fc total elimination absolute    , pride total elimination absolute
